@@ -2,6 +2,7 @@ import { AccountUpdate, Field, Mina, PrivateKey, PublicKey, UInt64 } from 'o1js'
 import { Deposit } from './Deposit';
 import { TokenA } from './TokenA';
 import { TokenB } from './TokenB';
+import { DepositB } from './DepositB';
 
 /*
  * This file specifies how to test the `Add` example smart contract. It is safe to delete this file and replace
@@ -20,6 +21,9 @@ describe('Deposit', () => {
     zkAppAddress: PublicKey,
     zkAppPrivateKey: PrivateKey,
     zkApp: Deposit,
+    zkAppAddressB: PublicKey,
+    zkAppPrivateKeyB: PrivateKey,
+    zkAppB: Deposit,
     zkToken0Address: PublicKey,
     zkToken0PrivateKey: PrivateKey,
     zkToken0: TokenA,
@@ -32,7 +36,8 @@ describe('Deposit', () => {
 
   beforeAll(async () => {
     if (proofsEnabled) {
-      await Deposit.compile();
+      const keyB = await DepositB.compile();
+      const keyA = await Deposit.compile();
       await TokenA.compile();
       await TokenB.compile();
     }
@@ -49,6 +54,10 @@ describe('Deposit', () => {
     zkAppAddress = zkAppPrivateKey.toPublicKey();
     zkApp = new Deposit(zkAppAddress);
 
+    zkAppPrivateKeyB = PrivateKey.random();
+    zkAppAddressB = zkAppPrivateKeyB.toPublicKey();
+    zkAppB = new DepositB(zkAppAddressB);
+
     zkToken0PrivateKey = PrivateKey.random();
     zkToken0Address = zkToken0PrivateKey.toPublicKey();
     zkToken0 = new TokenA(zkToken0Address);
@@ -63,15 +72,16 @@ describe('Deposit', () => {
 
 
     const txn = await Mina.transaction(deployerAccount, async () => {
-      AccountUpdate.fundNewAccount(deployerAccount, 7);
+      AccountUpdate.fundNewAccount(deployerAccount, 8);
       await zkApp.deploy();
+      await zkAppB.deploy();
       await zkToken0.deploy();
       await zkToken1.deploy();
       await zkToken3.deploy();
     });
     await txn.prove();
     // this tx needs .sign(), because `deploy()` adds an account update that requires signature authorization
-    await txn.sign([deployerKey, zkAppPrivateKey, zkToken0PrivateKey, zkToken1PrivateKey, zkToken3PrivateKey]).send();
+    await txn.sign([deployerKey, zkAppPrivateKey, zkToken0PrivateKey, zkToken1PrivateKey, zkToken3PrivateKey, zkAppPrivateKeyB]).send();
   });
 
   it('deposit token A', async () => {
@@ -88,7 +98,21 @@ describe('Deposit', () => {
     expect(balanceToken.value).toEqual(amtToken.value);
   });
 
-  it('deposit token B', async () => {
+  it('deposit token A failed on contract B', async () => {
+    let amtToken = UInt64.from(50 * 10 ** 9);
+
+    let txn = await Mina.transaction(deployerAccount, async () => {
+      AccountUpdate.fundNewAccount(deployerAccount, 1);
+      await zkAppB.deposit(zkToken0Address, amtToken);
+    });
+    await txn.prove();
+    await txn.sign([deployerKey]).send();
+
+    const balanceToken = Mina.getBalance(zkAppAddressB, zkToken0.deriveTokenId());
+    expect(balanceToken.value).toEqual(amtToken.value);
+  });
+
+  it('deposit token B failed on contract A', async () => {
     let amtToken = UInt64.from(50 * 10 ** 9);
 
     let txn = await Mina.transaction(deployerAccount, async () => {
@@ -102,6 +126,22 @@ describe('Deposit', () => {
     const balanceToken = Mina.getBalance(zkAppAddress, zkToken1.deriveTokenId());
     expect(balanceToken.value).toEqual(amtToken.value);
   });
+
+  it('deposit token B success on contract B', async () => {
+    let amtToken = UInt64.from(50 * 10 ** 9);
+
+    let txn = await Mina.transaction(deployerAccount, async () => {
+      AccountUpdate.fundNewAccount(deployerAccount, 1);
+      await zkAppB.deposit(zkToken1Address, amtToken);
+    });
+    // proof failed with token B
+    await txn.prove();
+    await txn.sign([deployerKey]).send();
+
+    const balanceToken = Mina.getBalance(zkAppAddressB, zkToken1.deriveTokenId());
+    expect(balanceToken.value).toEqual(amtToken.value);
+  });
+
 
   it('deposit token A bis', async () => {
     let amtToken = UInt64.from(50 * 10 ** 9);

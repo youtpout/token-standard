@@ -13,7 +13,7 @@ export class TokenB extends TokenContractV2 {
         // mint to deployer
         this.internal.mint({
             address: sender,
-            amount: UInt64.from(500_000 * 10 * 9),
+            amount: UInt64.from(500_000 * 10 ** 9),
         });
 
 
