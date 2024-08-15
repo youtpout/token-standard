@@ -1,6 +1,6 @@
-# Mina zkApp: PROJECT_NAME
+# Mina zkApp: Token standard
 
-This template uses TypeScript.
+If I use 2 TokenStandard with the same contract and one of the tokens is different from the one used to compile the contract, proof generation will fail.
 
 ## How to build
 

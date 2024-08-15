@@ -25,7 +25,10 @@ describe('Deposit', () => {
     zkToken0: TokenA,
     zkToken1Address: PublicKey,
     zkToken1PrivateKey: PrivateKey,
-    zkToken1: TokenB;
+    zkToken1: TokenB,
+    zkToken3Address: PublicKey,
+    zkToken3PrivateKey: PrivateKey,
+    zkToken3: TokenA;
 
   beforeAll(async () => {
     if (proofsEnabled) {
@@ -54,15 +57,21 @@ describe('Deposit', () => {
     zkToken1Address = zkToken1PrivateKey.toPublicKey();
     zkToken1 = new TokenB(zkToken1Address);
 
+    zkToken3PrivateKey = PrivateKey.random();
+    zkToken3Address = zkToken3PrivateKey.toPublicKey();
+    zkToken3 = new TokenA(zkToken3Address);
+
+
     const txn = await Mina.transaction(deployerAccount, async () => {
-      AccountUpdate.fundNewAccount(deployerAccount, 5);
+      AccountUpdate.fundNewAccount(deployerAccount, 7);
       await zkApp.deploy();
       await zkToken0.deploy();
       await zkToken1.deploy();
+      await zkToken3.deploy();
     });
     await txn.prove();
     // this tx needs .sign(), because `deploy()` adds an account update that requires signature authorization
-    await txn.sign([deployerKey, zkAppPrivateKey, zkToken0PrivateKey, zkToken1PrivateKey]).send();
+    await txn.sign([deployerKey, zkAppPrivateKey, zkToken0PrivateKey, zkToken1PrivateKey, zkToken3PrivateKey]).send();
   });
 
   it('deposit token A', async () => {
@@ -86,10 +95,25 @@ describe('Deposit', () => {
       AccountUpdate.fundNewAccount(deployerAccount, 1);
       await zkApp.deposit(zkToken1Address, amtToken);
     });
+    // proof failed with token B
     await txn.prove();
     await txn.sign([deployerKey]).send();
 
     const balanceToken = Mina.getBalance(zkAppAddress, zkToken1.deriveTokenId());
+    expect(balanceToken.value).toEqual(amtToken.value);
+  });
+
+  it('deposit token A bis', async () => {
+    let amtToken = UInt64.from(50 * 10 ** 9);
+
+    let txn = await Mina.transaction(deployerAccount, async () => {
+      AccountUpdate.fundNewAccount(deployerAccount, 1);
+      await zkApp.deposit(zkToken3Address, amtToken);
+    });
+    await txn.prove();
+    await txn.sign([deployerKey]).send();
+
+    const balanceToken = Mina.getBalance(zkAppAddress, zkToken3.deriveTokenId());
     expect(balanceToken.value).toEqual(amtToken.value);
   });
 });
