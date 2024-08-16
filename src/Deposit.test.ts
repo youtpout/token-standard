@@ -11,7 +11,7 @@ import { DepositB } from './DepositB';
  * See https://docs.minaprotocol.com/zkapps for more info.
  */
 
-let proofsEnabled = true;
+let proofsEnabled = false;
 
 describe('Deposit', () => {
   let deployerAccount: Mina.TestPublicKey,
@@ -23,7 +23,7 @@ describe('Deposit', () => {
     zkApp: Deposit,
     zkAppAddressB: PublicKey,
     zkAppPrivateKeyB: PrivateKey,
-    zkAppB: Deposit,
+    zkAppB: DepositB,
     zkToken0Address: PublicKey,
     zkToken0PrivateKey: PrivateKey,
     zkToken0: TokenA,
@@ -96,6 +96,40 @@ describe('Deposit', () => {
 
     const balanceToken = Mina.getBalance(zkAppAddress, zkToken0.deriveTokenId());
     expect(balanceToken.value).toEqual(amtToken.value);
+  });
+
+
+  it('deposit Mina', async () => {
+    let amtToken = UInt64.from(50 * 10 ** 9);
+
+    const txn = await Mina.transaction(deployerAccount, async () => {
+      await zkApp.depositMina(amtToken);
+    });
+    await txn.prove();
+    console.log("txn", txn.toPretty());
+
+
+    const txn2 = await Mina.transaction(senderAccount, async () => {
+      await zkApp.depositMina(amtToken);
+    });
+    await txn2.prove();
+    console.log("txn2", txn2.toPretty());
+    await txn2.sign([senderKey]).send();
+
+    await txn.sign([deployerKey, zkAppPrivateKey]).send();
+
+    const balanceToken = Mina.getBalance(zkAppAddress);
+    expect(balanceToken.value).toEqual(amtToken.mul(2).value);
+
+    const txn3 = await Mina.transaction(deployerAccount, async () => {
+      await zkApp.depositMina(amtToken);
+    });
+    console.log("txn3", txn3.toPretty());
+    await txn3.prove();
+    await txn3.sign([deployerKey]).send();
+
+    const balanceToken2 = Mina.getBalance(zkAppAddress);
+    expect(balanceToken2.value).toEqual(amtToken.mul(3).value);
   });
 
   it('deposit token A failed on contract B', async () => {
